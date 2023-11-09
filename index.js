@@ -11,6 +11,7 @@ import { fileURLToPath } from "url";
 //import routes
 import questionsRouter from './routes/questions.js';
 import { addResponse } from './controllers/questions.js';
+import { prisma } from './prisma/client/index.js';
 
 //Middleware
 /* CONFIGURATIONS */
@@ -58,8 +59,19 @@ app.get('/api/questions/response/download/:filename', (req, res) => {
   });
 });
 
-
+async function CheckDbConnection(){
+  try {
+   await prisma.$connect
+   console.log("Db Successfully Connected");
+  } catch (error) {
+    console.log("Db connection error",error);
+  }
+  
+}
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
+  CheckDbConnection();
   console.log(`Server is running on port ${PORT}`);
 });
+  
+
