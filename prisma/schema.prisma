@@ -1,0 +1,47 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// Define the model for questions
+model Question {
+  id              Int             @id @default(autoincrement())
+  name            String
+  type            String
+  required        Boolean
+  text            String?
+  description     String?
+  frm_options     Json?
+  file_properties FileProperties? @relation(fields: [filePropertiesId], references: [id])
+
+  // Define a relation to responses
+  filePropertiesId Int?
+}
+
+// Define the model for responses
+model Response {
+  id                Int           @id @default(autoincrement())
+  sessionId   String       // Foreign key to associate responses with a session
+  question    String
+  response    Json 
+  date_responded    DateTime      @default(now())
+}
+
+
+
+
+model FileProperties {
+  id                 Int        @id @default(autoincrement())
+  format             String
+  max_file_size      Float
+  max_file_size_unit String
+  multiple           Boolean
+  Question           Question[]
+}
