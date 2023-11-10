@@ -7,11 +7,13 @@ import helmet from "helmet";
 import morgan from "morgan";
 import path from "path";
 import { fileURLToPath } from "url";
+import AWS from "aws-sdk"
 
 //import routes
 import questionsRouter from './routes/questions.js';
 import { addResponse } from './controllers/questions.js';
 import { prisma } from './prisma/client/index.js';
+import multerS3 from "multer-s3";
 
 //Middleware
 /* CONFIGURATIONS */
@@ -28,15 +30,27 @@ app.use(cors());
 app.use("/uploads", express.static(path.join(__dirname, "public/uploads")));
 
 /* FILE STORAGE */
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "public/uploads");
-  },
-  filename: function (req, file, cb) {
-    cb(null, file.originalname);
-  },
+// const storage = multer.diskStorage({
+//   destination: function (req, file, cb) {
+//     cb(null, "public/uploads");
+//   },
+//   filename: function (req, file, cb) {
+//     cb(null, file.originalname);
+//   },
+// });
+// const upload = multer({ storage });
+
+/* file upload to aws */
+const s3 = new AWS.S3()
+const upload = multer({
+  storage: multerS3({
+    s3: s3,
+    bucket: 'cyclic-cute-tan-indri-hose-eu-central-1',
+    key: function (req, file, cb) {
+      cb(null, 'uploads/' + file.originalname);
+    },
+  }),
 });
-const upload = multer({ storage });
 
 /* ROUTES WITH FILES */
 app.put("/api/questions/response", upload.array('certificates'), addResponse);
