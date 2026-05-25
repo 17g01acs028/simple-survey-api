@@ -10,32 +10,44 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Define the model for surveys
+model Survey {
+  id          Int        @id @default(autoincrement())
+  name        String
+  description String?
+  created_at  DateTime   @default(now())
+  questions   Question[]
+  responses   Response[]
+}
+
 // Define the model for questions
 model Question {
   id              Int             @id @default(autoincrement())
+  surveyId        Int
   name            String
   type            String
   required        Boolean
   text            String?
   description     String?
   frm_options     Json?
+  
+  survey          Survey          @relation(fields: [surveyId], references: [id])
   file_properties FileProperties? @relation(fields: [filePropertiesId], references: [id])
-
-  // Define a relation to responses
   filePropertiesId Int?
 }
 
 // Define the model for responses
 model Response {
-  id                Int           @id @default(autoincrement())
-  sessionId   String       // Foreign key to associate responses with a session
-  question    String
-  response    Json 
-  date_responded    DateTime      @default(now())
+  id              Int      @id @default(autoincrement())
+  surveyId        Int
+  sessionId       String   // Foreign key to associate responses with a session
+  question        String
+  response        Json 
+  ipAddress       String?  // Track IP to limit 1 per IP per survey
+  date_responded  DateTime @default(now())
+
+  survey          Survey   @relation(fields: [surveyId], references: [id])
 }
-
-
-
 
 model FileProperties {
   id                 Int        @id @default(autoincrement())

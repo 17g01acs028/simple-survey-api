@@ -10,6 +10,7 @@ import AWS from "aws-sdk"
 
 //import routes
 import questionsRouter from './routes/questions.js';
+import surveysRouter from './routes/surveys.js';
 import { addResponse } from './controllers/questions.js';
 import { prisma } from './prisma/client/index.js';
 import multerS3 from "multer-s3";
@@ -52,10 +53,11 @@ const upload = multer({
 });
 
 /* ROUTES WITH FILES */
-app.put("/api/questions/response", upload.array('certificates'), addResponse);
+app.put("/api/questions/:surveyId/response", upload.array('certificates'), addResponse);
 
 // Include the questions route
 app.use('/api/questions', questionsRouter);
+app.use('/api/surveys', surveysRouter);
 
 //Download file
 

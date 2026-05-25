@@ -6,7 +6,10 @@ import { v4 as uuidv4 } from 'uuid';
 //Retrieve Questions from database
 export const getQuestions = async (req, res) => {
   try {
-    const questions = await prisma.question.findMany();
+    const surveyId = parseInt(req.params.surveyId);
+    const questions = await prisma.question.findMany({
+      where: { surveyId }
+    });
 
   //Create XML 
     const xml = `<questions>
@@ -39,6 +42,7 @@ export const getQuestions = async (req, res) => {
 //Insert question to the database
 export const addQuestion = async (req, res) => {
   try {
+    const surveyId = parseInt(req.params.surveyId);
     let newQuestion = {};
 
     // Check if the body is an XML string
@@ -47,6 +51,7 @@ export const addQuestion = async (req, res) => {
       const q = parsed.question;
       
       newQuestion = {
+        surveyId,
         name: q.name,
         type: q.type,
         required: q.required === 'true' || q.required === true,
@@ -74,6 +79,7 @@ export const addQuestion = async (req, res) => {
     } else {
       // Fallback if it's already a JSON object
       newQuestion = req.body;
+      newQuestion.surveyId = surveyId;
     }
 
     const createData = { ...newQuestion };
@@ -111,6 +117,21 @@ export const addQuestion = async (req, res) => {
 //Insert new response to the database
 export const addResponse = async (req, res) => {
   try {
+    const surveyId = parseInt(req.params.surveyId);
+    const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
+
+    // Check if a response for this survey and IP already exists
+    const existingResponse = await prisma.response.findFirst({
+      where: {
+        surveyId,
+        ipAddress
+      }
+    });
+
+    if (existingResponse) {
+      return res.status(403).json({ error: 'You have already submitted a response for this survey.' });
+    }
+
     let response = req.body;
     let files;
     console.log(response);
@@ -126,10 +147,8 @@ export const addResponse = async (req, res) => {
       }, {});
     }
 
-
     // Merge the files into the body
     response = { ...response, ...files };
-
 
     const sessionId = uuidv4(); // This generates a random UUID
     console.log(response);
@@ -151,14 +170,15 @@ export const addResponse = async (req, res) => {
 
     stringifyArrays(response);
 
-
     // Iterate through the response data and save it to the database
     for (const [question, answer] of Object.entries(response)) {
       await prisma.response.create({
         data: {
+          surveyId,
           sessionId,
           question,
           response: answer,
+          ipAddress
         },
       });
     }
@@ -182,13 +202,16 @@ export const addResponse = async (req, res) => {
 //Retrieve responses from database (filter and paginate)
 export const getResponse = async (req, res) => {
   try {
+    const surveyId = parseInt(req.params.surveyId);
     //Create variables
     const email = req.query.email || "";
     const pageSize = parseInt(req.query.pageSize, 10) || 10;
     const currentPage = parseInt(req.query.page, 10) || 1;
 
     // Retrieve all responses from the database
-    const responses = await prisma.response.findMany();
+    const responses = await prisma.response.findMany({
+      where: { surveyId }
+    });
 
 
     if (responses.length === 0) {
