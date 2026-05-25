@@ -38,24 +38,73 @@ export const getQuestions = async (req, res) => {
 
 //Insert question to the database
 export const addQuestion = async (req, res) => {
-  const newQuestion = req.body;
-
   try {
+    let newQuestion = {};
+
+    // Check if the body is an XML string
+    if (typeof req.body === 'string' && req.body.trim().startsWith('<')) {
+      const parsed = await xml2js.parseStringPromise(req.body, { explicitArray: false });
+      const q = parsed.question;
+      
+      newQuestion = {
+        name: q.name,
+        type: q.type,
+        required: q.required === 'true' || q.required === true,
+        text: q.text,
+        description: q.description || null,
+      };
+
+      if (q.frm_options) {
+        newQuestion.frm_options = {
+          multiple: q.frm_options.multiple,
+          values: q.frm_options.values && q.frm_options.values.value 
+            ? (Array.isArray(q.frm_options.values.value) ? q.frm_options.values.value : [q.frm_options.values.value])
+            : []
+        };
+      }
+
+      if (q.file_properties) {
+        newQuestion.file_properties = {
+          format: q.file_properties.format,
+          max_file_size: parseFloat(q.file_properties.max_file_size),
+          max_file_size_unit: q.file_properties.max_file_size_unit,
+          multiple: q.file_properties.multiple === 'true' || q.file_properties.multiple === 'yes',
+        };
+      }
+    } else {
+      // Fallback if it's already a JSON object
+      newQuestion = req.body;
+    }
+
+    const createData = { ...newQuestion };
+    if (createData.file_properties) {
+      const fp = createData.file_properties;
+      delete createData.file_properties;
+      createData.file_properties = {
+        create: fp
+      };
+    }
+
     // Insert the new question into the database
     const createdQuestion = await prisma.question.create({
-      data: {
-        ...newQuestion,
-        file_properties: {
-          create: newQuestion.file_properties,
-        }
-      },
+      data: createData,
     });
 
-    res.status(201).json({ message: 'Question created successfully', createdQuestion });
+    const builder = new xml2js.Builder();
+    const xml = builder.buildObject({
+      result: {
+        message: 'Question created successfully',
+        id: createdQuestion.id
+      }
+    });
+
+    res.set('Content-Type', 'text/xml');
+    res.status(201).send(xml);
   } catch (error) {
     console.log(error);
-    res.status(500).json({ error: 'Error creating the question' });
-
+    const builder = new xml2js.Builder();
+    res.set('Content-Type', 'text/xml');
+    res.status(500).send(builder.buildObject({ error: 'Error creating the question' }));
   }
 }
 
