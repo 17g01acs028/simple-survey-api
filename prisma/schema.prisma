@@ -24,6 +24,7 @@ model Survey {
 model Question {
   id              Int             @id @default(autoincrement())
   surveyId        Int
+  order           Int             @default(0)
   name            String
   type            String
   required        Boolean

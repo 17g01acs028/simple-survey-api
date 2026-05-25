@@ -70,3 +70,29 @@ export const addSurvey = async (req, res) => {
     res.status(500).json({ error: 'Error creating the survey' });
   }
 };
+
+// Delete an existing survey
+export const deleteSurvey = async (req, res) => {
+  try {
+    const surveyId = parseInt(req.params.id);
+
+    // Delete responses and questions first due to foreign key constraints
+    await prisma.response.deleteMany({
+      where: { surveyId }
+    });
+
+    await prisma.question.deleteMany({
+      where: { surveyId }
+    });
+
+    // Delete the survey
+    await prisma.survey.delete({
+      where: { id: surveyId }
+    });
+
+    res.status(200).json({ message: 'Survey deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting survey:', error);
+    res.status(500).json({ error: 'Error deleting the survey' });
+  }
+};

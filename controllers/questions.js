@@ -8,16 +8,17 @@ export const getQuestions = async (req, res) => {
   try {
     const surveyId = parseInt(req.params.surveyId);
     const questions = await prisma.question.findMany({
-      where: { surveyId }
+      where: { surveyId },
+      orderBy: { order: 'asc' }
     });
 
   //Create XML 
     const xml = `<questions>
         ${questions.map((question) => `
-          <question name="${question.name}" type="${question.type}" required="${question.required ? "yes" : "no"}">
+          <question id="${question.id}" name="${question.name}" type="${question.type}" required="${question.required ? "yes" : "no"}">
             <text>${question.text}</text>
             <description>${question.description ? question.description : ""}</description>
-            ${question.type === "choice" ?
+            ${question.type === "choice" && question.frm_options ?
         `<options multiple="${question.frm_options.multiple}">
                 ${question.frm_options.values.map((value) => `
                   <option value="${value}">${value}</option>
@@ -25,6 +26,10 @@ export const getQuestions = async (req, res) => {
               </options>` : ""}
             ${question.type === "file" && question.filePropertiesId ?
         `<file_properties format=".pdf" max_file_size="1" max_file_size_unit="mb" multiple="yes"/>` : ""}
+            ${question.type === "range" && question.frm_options ?
+        `<range_properties min="${question.frm_options.min}" max="${question.frm_options.max}" step="${question.frm_options.step}"/>` : ""}
+            ${question.type === "rate" && question.frm_options ?
+        `<rate_properties max="${question.frm_options.max}"/>` : ""}
           </question>
         `).join("")}
       </questions>`;
@@ -45,6 +50,13 @@ export const addQuestion = async (req, res) => {
     const surveyId = parseInt(req.params.surveyId);
     let newQuestion = {};
 
+    // Determine the next order for this question
+    const maxOrderQuestion = await prisma.question.findFirst({
+      where: { surveyId },
+      orderBy: { order: 'desc' }
+    });
+    const nextOrder = maxOrderQuestion ? maxOrderQuestion.order + 1 : 0;
+
     // Check if the body is an XML string
     if (typeof req.body === 'string' && req.body.trim().startsWith('<')) {
       const parsed = await xml2js.parseStringPromise(req.body, { explicitArray: false });
@@ -52,6 +64,7 @@ export const addQuestion = async (req, res) => {
       
       newQuestion = {
         surveyId,
+        order: nextOrder,
         name: q.name,
         type: q.type,
         required: q.required === 'true' || q.required === true,
@@ -59,7 +72,17 @@ export const addQuestion = async (req, res) => {
         description: q.description || null,
       };
 
-      if (q.frm_options) {
+      if (q.type === 'range' && q.range_properties) {
+        newQuestion.frm_options = {
+          min: parseFloat(q.range_properties.min),
+          max: parseFloat(q.range_properties.max),
+          step: parseFloat(q.range_properties.step)
+        };
+      } else if (q.type === 'rate' && q.rate_properties) {
+        newQuestion.frm_options = {
+          max: parseFloat(q.rate_properties.max)
+        };
+      } else if (q.frm_options) {
         newQuestion.frm_options = {
           multiple: q.frm_options.multiple,
           values: q.frm_options.values && q.frm_options.values.value 
@@ -111,6 +134,101 @@ export const addQuestion = async (req, res) => {
     const builder = new xml2js.Builder();
     res.set('Content-Type', 'text/xml');
     res.status(500).send(builder.buildObject({ error: 'Error creating the question' }));
+  }
+}
+
+// Update existing question
+export const updateQuestion = async (req, res) => {
+  try {
+    const questionId = parseInt(req.params.questionId);
+    let updateData = {};
+
+    if (typeof req.body === 'string' && req.body.trim().startsWith('<')) {
+      const parsed = await xml2js.parseStringPromise(req.body, { explicitArray: false });
+      const q = parsed.question;
+      
+      updateData = {
+        name: q.name,
+        type: q.type,
+        required: q.required === 'true' || q.required === true,
+        text: q.text,
+        description: q.description || null,
+      };
+
+      if (q.type === 'range' && q.range_properties) {
+        updateData.frm_options = {
+          min: parseFloat(q.range_properties.min),
+          max: parseFloat(q.range_properties.max),
+          step: parseFloat(q.range_properties.step)
+        };
+      } else if (q.type === 'rate' && q.rate_properties) {
+        updateData.frm_options = {
+          max: parseFloat(q.rate_properties.max)
+        };
+      } else if (q.frm_options) {
+        updateData.frm_options = {
+          multiple: q.frm_options.multiple,
+          values: q.frm_options.values && q.frm_options.values.value 
+            ? (Array.isArray(q.frm_options.values.value) ? q.frm_options.values.value : [q.frm_options.values.value])
+            : []
+        };
+      } else {
+        updateData.frm_options = null;
+      }
+    } else {
+      updateData = req.body;
+    }
+
+    // We skip updating file_properties for simplicity or just omit it for now
+    // If needed we can add nested update logic for file_properties
+    
+    await prisma.question.update({
+      where: { id: questionId },
+      data: updateData,
+    });
+
+    const builder = new xml2js.Builder();
+    const xml = builder.buildObject({
+      result: {
+        message: 'Question updated successfully',
+        id: questionId
+      }
+    });
+
+    res.set('Content-Type', 'text/xml');
+    res.status(200).send(xml);
+  } catch (error) {
+    console.error(error);
+    const builder = new xml2js.Builder();
+    res.set('Content-Type', 'text/xml');
+    res.status(500).send(builder.buildObject({ error: 'Error updating the question' }));
+  }
+}
+
+// Delete existing question
+export const deleteQuestion = async (req, res) => {
+  try {
+    const questionId = parseInt(req.params.questionId);
+    
+    await prisma.question.delete({
+      where: { id: questionId }
+    });
+
+    const builder = new xml2js.Builder();
+    const xml = builder.buildObject({
+      result: {
+        message: 'Question deleted successfully',
+        id: questionId
+      }
+    });
+
+    res.set('Content-Type', 'text/xml');
+    res.status(200).send(xml);
+  } catch (error) {
+    console.error(error);
+    const builder = new xml2js.Builder();
+    res.set('Content-Type', 'text/xml');
+    res.status(500).send(builder.buildObject({ error: 'Error deleting the question' }));
   }
 }
 
@@ -315,4 +433,29 @@ for (const [sessionId, sessionData] of data) {
 
 function isPartialMatch(partial, full) {
   return full.includes(partial);
+}
+
+// Reorder questions
+export const reorderQuestions = async (req, res) => {
+  try {
+    const questionsToUpdate = req.body;
+
+    if (!Array.isArray(questionsToUpdate)) {
+      return res.status(400).json({ error: 'Expected an array of question orders' });
+    }
+
+    const updatePromises = questionsToUpdate.map(q => {
+      return prisma.question.update({
+        where: { id: parseInt(q.id) },
+        data: { order: parseInt(q.order) }
+      });
+    });
+
+    await prisma.$transaction(updatePromises);
+
+    res.status(200).json({ message: 'Questions reordered successfully' });
+  } catch (error) {
+    console.error('Error reordering questions:', error);
+    res.status(500).json({ error: 'Error reordering questions' });
+  }
 }
