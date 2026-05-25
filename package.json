@@ -9,7 +9,10 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "db:setup": "node scripts/prisma-setup.js",
+    "migrate": "npm run db:setup && npx prisma migrate dev",
+    "db:push": "npm run db:setup && npx prisma db push"
   },
   "keywords": [],
   "author": "",
@@ -33,5 +36,5 @@
     "uuid": "^9.0.1",
     "xml2js": "^0.6.2"
   },
-  "builds": "npx prisma db push && npx prisma generate && next build"
+  "builds": "npm run db:push && npx prisma generate && next build"
 }
